@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import matplotlib.pyplot as plt
 import copy
 import pprint
 
@@ -12,6 +13,12 @@ class Node:
 
         if parent:
             self.parent.children.append(self)
+
+    def replace_with_child(self, index):
+        for i in range(len(self.parent.children)):
+            if self.parent.children[i] == self:
+                self.parent.children[i] = self.children[index]
+                self.children[index].parent = self.parent
 
 
 def print_tree(current_node, childattr='children', nameattr='name', indent='', last='updown'):
@@ -97,11 +104,11 @@ def gain(sample, feature, err_f):
     return prev_error - sum(error_terms_to_sum)
 
 def id3(sample, attributes, err_f, max_depth=9999, parent = None):
-    if len(sample) == 0:
-        return Node("1", parent)
     r = ratio_labeled_1(sample)
-    if max_depth == 0:
-        return Node("1", parent)
+    if max_depth == 1:
+        if r > 0.5:
+            return Node("1", parent)
+        return Node("0", parent)
     if r == 1:
         return Node("1", parent)
     if r == 0:
@@ -111,26 +118,59 @@ def id3(sample, attributes, err_f, max_depth=9999, parent = None):
             return Node("1", parent)
         return Node("0", parent)
     argmax = np.argmax([gain(sample, a, err_f) for a in attributes])
-    print(argmax)
     j = attributes[argmax]
     attributes.remove(j)
     sample_split_by_feature = [sample_by_feature_value(sample, j, i) for i in range(3)]
-    split_node = Node("X_" + str(j) + " = ?", parent)
-    new_trees = [id3(sample_split_by_feature[i], attributes, err_f, max_depth-1, split_node) for i in range(3)]
-    # for i in range(3):
-    #     split_node.children.append(new_trees[i])
+    split_node = Node("X_" + str(j) + "=?", parent)
+    for i in range(3):
+        if len(sample_split_by_feature[i]) == 0:
+            if r > 0.5:
+                Node("1", split_node)
+            else:
+                Node("0", split_node)
+        else:
+            id3(sample_split_by_feature[i], attributes, err_f, max_depth-1, split_node)
     return split_node
 
+def tree_loss(validation, root):
+    errors = 0
+    for sample in validation:
+        curNode = root
+        while curNode.name[0] not in ["0", "1"]:
+            #fix for double digit feature retard
+            feature = int(curNode.name[2])
+            curNode = curNode.children[sample[0][feature]]
+        if str(sample[1]) != curNode.name:
+            errors+=1
+    return errors/float(len(validation))
+
+
+def pruneNode(root, node, training):
+    nodeName = node.name
+    node.name = "1"
+    err1 = tree_loss(training, root)
+    node.name = "0"
+    err2 = tree_loss(training, root)
+
+
+def q1():
+    training = parseSampleFile("train.txt")
+    validation = parseSampleFile("validation.txt")
+    training_err = [tree_loss(training, id3(training, range(16), entropy_err, i+1)) for i in range(16)]
+    validation_err = [tree_loss(validation, id3(training, range(16), entropy_err, i + 1)) for i in range(16)]
+    plt.plot(range(1, 17), training_err, 'r-', label = "training error")
+    plt.plot(range(1, 17), validation_err, 'b-', label="validation error")
+    plt.legend()
+    plt.show()
 
 def main():
+    training = parseSampleFile("train.txt")
     validation = parseSampleFile("validation.txt")
-    tree = id3(validation, range(16), entropy_err, 15)
-    # print tree.name
-    # print(tree.children[0].name)
-    # print(tree.children[1].name)
-    # print(tree.children[2].name)
-    print_tree(tree)
-    print([gain(validation, i, entropy_err) for i in range(16)])
+    # tree = id3(training, range(16), entropy_err)
+    # print_tree(tree)
+    # print(tree_loss(validation, tree))
+    # print(tree_loss(training, tree))
+    q1()
 
 if __name__ == "__main__":
     main()
