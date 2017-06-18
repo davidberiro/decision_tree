@@ -75,6 +75,8 @@ def parseSampleFile(f):
     return [(parts[0:-1], parts[-1]) for parts in content]
 
 def ratio_labeled_1(sample):
+    if len(sample) == 0:
+        return 0
     return len([s for s in sample if s[1] == 1])/float(len(sample))
 
 def sample_by_feature_value(sample, feature, value):
@@ -94,12 +96,41 @@ def gain(sample, feature, err_f):
     prev_error = err_f(ratio_labeled_1(sample))
     return prev_error - sum(error_terms_to_sum)
 
-def id3(samples, attributes, max_depth=9999):
-    return
+def id3(sample, attributes, err_f, max_depth=9999, parent = None):
+    if len(sample) == 0:
+        return Node("1", parent)
+    r = ratio_labeled_1(sample)
+    if max_depth == 0:
+        return Node("1", parent)
+    if r == 1:
+        return Node("1", parent)
+    if r == 0:
+        return Node("0", parent)
+    if len(attributes) == 0:
+        if r > 0.5:
+            return Node("1", parent)
+        return Node("0", parent)
+    argmax = np.argmax([gain(sample, a, err_f) for a in attributes])
+    print(argmax)
+    j = attributes[argmax]
+    attributes.remove(j)
+    sample_split_by_feature = [sample_by_feature_value(sample, j, i) for i in range(3)]
+    split_node = Node("X_" + str(j) + " = ?", parent)
+    new_trees = [id3(sample_split_by_feature[i], attributes, err_f, max_depth-1, split_node) for i in range(3)]
+    # for i in range(3):
+    #     split_node.children.append(new_trees[i])
+    return split_node
+
 
 def main():
     validation = parseSampleFile("validation.txt")
-    print(gain(validation, 6, entropy_err))
+    tree = id3(validation, range(16), entropy_err, 15)
+    # print tree.name
+    # print(tree.children[0].name)
+    # print(tree.children[1].name)
+    # print(tree.children[2].name)
+    print_tree(tree)
+    print([gain(validation, i, entropy_err) for i in range(16)])
 
 if __name__ == "__main__":
     main()
